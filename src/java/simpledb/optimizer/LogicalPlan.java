@@ -466,7 +466,7 @@ public class LogicalPlan {
                                         groupByField == null?Aggregator.NO_GROUPING:td.fieldNameToIndex(groupByField),
                                 getAggOp(aggOp));
             } catch (NoSuchElementException | IllegalArgumentException e) {
-                throw new simpledb.ParsingException(e);
+                throw new ParsingException(e);
             }
             node = aggNode;
         }

@@ -22,15 +22,26 @@ import java.util.concurrent.ConcurrentHashMap;
  * @Threadsafe
  */
 public class Catalog {
-
+    ConcurrentHashMap<Integer , Table>  map ;
     /**
      * Constructor.
      * Creates a new, empty catalog.
      */
     public Catalog() {
         // some code goes here
+        map= new ConcurrentHashMap<>();
     }
+    private static  class  Table{
+        public  final  DbFile  dbFile ;
+        public  final  String  name ;
+        public  final  String pk;
+        public  Table(DbFile file, String tableName, String pkeyField){
+            dbFile  = file;
+            name = tableName;
+            pk = pkeyField;
+        }
 
+    }
     /**
      * Add a new table to the catalog.
      * This table's contents are stored in the specified DbFile.
@@ -42,6 +53,9 @@ public class Catalog {
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
+        int fileId = file.getId();
+        map.put(fileId,new Table(file,name,pkeyField));
+
     }
 
     public void addTable(DbFile file, String name) {
@@ -64,8 +78,21 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public int getTableId(String name) throws NoSuchElementException {
+        if (name==null)
+            throw  new NoSuchElementException();
         // some code goes here
-        return 0;
+
+        Integer tableID =   map.searchValues(1,(value)->{
+            if(value.name.equals(name))
+                return  value.dbFile.getId();
+            return null;
+        });
+        if(tableID!=null)
+            return tableID.intValue();
+        else {
+            throw new NoSuchElementException("not found id for table " + name);
+        }
+
     }
 
     /**
@@ -76,7 +103,15 @@ public class Catalog {
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+        Table temp = map.getOrDefault(tableid,null);
+        if(temp!=null){
+            return temp.dbFile.getTupleDesc();
+        }
+        else{
+            throw new NoSuchElementException("not found tupleDesc for table "+ tableid);
+        }
+
+
     }
 
     /**
@@ -86,28 +121,50 @@ public class Catalog {
      *     function passed to addTable
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
+        Table temp = map.getOrDefault(tableid,null);
         // some code goes here
-        return null;
+        if(temp!=null){
+            return temp.dbFile;
+        }
+        else {
+            throw new NoSuchElementException("not found dbFile for table"+tableid);
+        }
     }
 
     public String getPrimaryKey(int tableid) {
         // some code goes here
-        return null;
+        Table temp = map.getOrDefault(tableid,null);
+        // some code goes here
+        if(temp!=null){
+            return temp.pk;
+        }
+        else {
+            throw new NoSuchElementException("not found primaryKey for table"+tableid);
+        }
     }
 
     public Iterator<Integer> tableIdIterator() {
         // some code goes here
-        return null;
+        return map.keySet().iterator();
     }
 
     public String getTableName(int id) {
         // some code goes here
-        return null;
+        Table temp = map.getOrDefault(id,null);
+        // some code goes here
+        if(temp!=null){
+            return temp.name;
+        }
+        else {
+            throw new NoSuchElementException("not found tableName for table"+id);
+        }
+
     }
     
     /** Delete all tables from the catalog */
     public void clear() {
         // some code goes here
+        map.clear();
     }
     
     /**

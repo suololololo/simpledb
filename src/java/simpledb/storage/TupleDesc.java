@@ -3,12 +3,14 @@ package simpledb.storage;
 import simpledb.common.Type;
 
 import java.io.Serializable;
+
 import java.util.*;
 
 /**
  * TupleDesc describes the schema of a tuple.
  */
-public class TupleDesc implements Serializable {
+public class TupleDesc implements Serializable,Cloneable {
+    private       List<TDItem>  list  = new ArrayList<>();
 
     /**
      * A help class to facilitate organizing the information of each field
@@ -21,12 +23,12 @@ public class TupleDesc implements Serializable {
          * The type of the field
          * */
         public final Type fieldType;
-        
+
         /**
          * The name of the field
          * */
         public final String fieldName;
-
+//        public  String fieldName;
         public TDItem(Type t, String n) {
             this.fieldName = n;
             this.fieldType = t;
@@ -44,7 +46,8 @@ public class TupleDesc implements Serializable {
      * */
     public Iterator<TDItem> iterator() {
         // some code goes here
-        return null;
+        return  list.iterator();
+
     }
 
     private static final long serialVersionUID = 1L;
@@ -62,6 +65,18 @@ public class TupleDesc implements Serializable {
      */
     public TupleDesc(Type[] typeAr, String[] fieldAr) {
         // some code goes here
+        int length = typeAr.length;
+        if(fieldAr!=null){
+            for(int i = 0; i < length ; i++){
+                list.add(new TDItem(typeAr[i],fieldAr[i]));
+            }
+        }
+        else {
+            for(int i = 0; i < length ; i++){
+                list.add(new TDItem(typeAr[i],null));
+            }
+        }
+
     }
 
     /**
@@ -74,6 +89,7 @@ public class TupleDesc implements Serializable {
      */
     public TupleDesc(Type[] typeAr) {
         // some code goes here
+        this(typeAr,null);
     }
 
     /**
@@ -81,7 +97,7 @@ public class TupleDesc implements Serializable {
      */
     public int numFields() {
         // some code goes here
-        return 0;
+        return list.size();
     }
 
     /**
@@ -95,7 +111,12 @@ public class TupleDesc implements Serializable {
      */
     public String getFieldName(int i) throws NoSuchElementException {
         // some code goes here
-        return null;
+        try {
+            return  list.get(i).fieldName;
+        }
+        catch (NoSuchElementException e){
+            throw  new NoSuchElementException();
+        }
     }
 
     /**
@@ -110,7 +131,12 @@ public class TupleDesc implements Serializable {
      */
     public Type getFieldType(int i) throws NoSuchElementException {
         // some code goes here
-        return null;
+        try {
+            return  list.get(i).fieldType;
+        }
+        catch (NoSuchElementException e){
+            throw  new NoSuchElementException();
+        }
     }
 
     /**
@@ -123,17 +149,39 @@ public class TupleDesc implements Serializable {
      *             if no field with a matching name is found.
      */
     public int fieldNameToIndex(String name) throws NoSuchElementException {
+        if(name==null){
+            throw   new NoSuchElementException();
+        }
         // some code goes here
-        return 0;
+        try {
+            for(int i = 0 ; i< list.size();i++){
+                if (list.get(i).fieldName==null){
+
+                }
+                else if(list.get(i).fieldName.equals(name)){
+                    return  i;
+                }
+            }
+            throw   new NoSuchElementException();
+        }
+        catch (NoSuchElementException e){
+            throw   new NoSuchElementException();
+        }
+
     }
 
     /**
+     * tuples jilu de  zijiedaxiao
      * @return The size (in bytes) of tuples corresponding to this TupleDesc.
      *         Note that tuples from a given TupleDesc are of a fixed size.
      */
     public int getSize() {
         // some code goes here
-        return 0;
+        int result = 0 ;
+        for(int i = 0 ; i< list.size();i++){
+            result +=list.get(i).fieldType.getLen();
+        }
+        return result;
     }
 
     /**
@@ -148,7 +196,18 @@ public class TupleDesc implements Serializable {
      */
     public static TupleDesc merge(TupleDesc td1, TupleDesc td2) {
         // some code goes here
-        return null;
+        Type[]  type = new Type[td1.list.size()+td2.list.size()];
+        String[] sr = new String[td1.list.size()+td2.list.size()];
+        for(int i =0; i < td1.list.size();i++){
+            type[i] =  td1.list.get(i).fieldType;
+            sr[i] = td1.list.get(i).fieldName;
+        }
+        int length = td1.list.size();
+        for(int i = 0 ; i < td2.list.size();i++){
+            type[i+length] = td2.list.get(i).fieldType;
+            sr[i+length]  = td2.list.get(i).fieldName;
+        }
+        return  new TupleDesc(type,sr);
     }
 
     /**
@@ -164,7 +223,33 @@ public class TupleDesc implements Serializable {
 
     public boolean equals(Object o) {
         // some code goes here
+//        if(!(o instanceof  TupleDesc)){
+//            return  false;
+//        }
+//        else {
+//            TupleDesc temp = (TupleDesc) o;
+//            if(this.getSize()!=temp.getSize()){
+//                return  false;
+//            }
+//            for(int i = 0 ; i< temp.list.size();i++){
+//                if (!temp.list.get(i).toString().equals(this.list.get(i).toString()))
+//                    return  false;
+//            }
+//        }
+//        return true;
+        if(this.getClass().isInstance(o)) {
+            TupleDesc two = (TupleDesc) o;
+            if (numFields() == two.numFields()) {
+                for (int i = 0; i < numFields(); ++i) {
+                    if (!list.get(i).fieldType.equals(two.list.get(i).fieldType)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }
         return false;
+
     }
 
     public int hashCode() {
@@ -177,11 +262,30 @@ public class TupleDesc implements Serializable {
      * Returns a String describing this descriptor. It should be of the form
      * "fieldType[0](fieldName[0]), ..., fieldType[M](fieldName[M])", although
      * the exact format does not matter.
-     * 
+     *
      * @return String describing this descriptor.
      */
+    @Override
     public String toString() {
-        // some code goes here
-        return "";
+//        return "TupleDesc{" +
+//                "list=" + list +
+//                '}';
+        StringBuilder sb = new StringBuilder();
+        for(int i=0;i<list.size()-1;++i){
+            sb.append(list.get(i).fieldName + "(" + list.get(i).fieldType + "), ");
+        }
+        sb.append(list.get(list.size()-1).fieldName + "(" + list.get(list.size()-1).fieldType + ")");
+        return sb.toString();
+    }
+
+    public TupleDesc clone(String prefix) throws  CloneNotSupportedException{
+        TupleDesc tupleDesc = (TupleDesc) super.clone();
+        tupleDesc.list = new ArrayList<>();
+
+        for (Iterator iterator = this.iterator();iterator.hasNext();){
+            TDItem old = (TDItem) iterator.next();
+            tupleDesc.list.add(new TDItem(old.fieldType,prefix+"."+old.fieldName));
+        }
+        return tupleDesc;
     }
 }

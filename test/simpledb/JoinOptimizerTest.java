@@ -624,7 +624,8 @@ public class JoinOptimizerTest extends SimpleDbTestBase {
         // If you're only re-ordering the join nodes,
         // you shouldn't end up with more than you started with
         Assert.assertEquals(result.size(), nodes.size());
-
+        System.out.println(result.get(result.size()-1).t1Alias.equals("a"));
+        System.out.println(result.get(result.size()-1).t2Alias.equals("a"));
         // Make sure that "a" is the outermost table in the join
         Assert.assertTrue(result.get(result.size() - 1).t2Alias.equals("a")
                 || result.get(result.size() - 1).t1Alias.equals("a"));
