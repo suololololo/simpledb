@@ -13,10 +13,7 @@ import java.io.IOException;
 import simpledb.storage.Page;
 import simpledb.storage.DbFile;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Vector;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -39,8 +36,9 @@ public class BufferPool {
     private static final int DEFAULT_PAGE_SIZE = 4096;
 
     private static int pageSize = DEFAULT_PAGE_SIZE;
-
+    private int age;
     private ConcurrentHashMap<PageId, Page> pageStore;
+    private ConcurrentHashMap<PageId, Integer> pageAge;
     /**
      * Default number of pages passed to the constructor. This is used by
      * other classes. BufferPool should use the numPages argument to the
@@ -49,28 +47,33 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
     private int numPages;
     private PageLockManager pageLockManager;
+
     private class PageLock {
         public TransactionId transactionId;
         public int lockType;
+
         public PageLock(TransactionId transactionId, int lockType) {
             this.transactionId = transactionId;
             this.lockType = lockType;
         }
     }
+
     //inefficient
     private class PageLockManager {
-//        ReentrantReadWriteLock reentrantReadWriteLock;
-        public Map<PageId,List<PageLock>> lockMap;
+        //        ReentrantReadWriteLock reentrantReadWriteLock;
+        public Map<PageId, List<PageLock>> lockMap;
+
         public PageLockManager() {
             lockMap = new ConcurrentHashMap<>();
         }
-        public synchronized boolean acquireLock(TransactionId transactionId, PageId pageId,int lockType) {
+
+        public synchronized boolean acquireLock(TransactionId transactionId, PageId pageId, int lockType) {
             //if no lock
             if (lockMap.get(pageId) == null) {
-                PageLock pageLock = new PageLock(transactionId,lockType);
+                PageLock pageLock = new PageLock(transactionId, lockType);
                 List<PageLock> pageLockList = new Vector<>();
                 pageLockList.add(pageLock);
-                lockMap.put(pageId,pageLockList);
+                lockMap.put(pageId, pageLockList);
                 return true;
             }
             List<PageLock> pageLockList = lockMap.get(pageId);
@@ -81,7 +84,8 @@ public class BufferPool {
                     }
                     if (pageLock.lockType == 1) {
                         return true;
-                    } if (pageLockList.size() == 1 ) {
+                    }
+                    if (pageLockList.size() == 1) {
                         pageLock.lockType = 1;
                         return true;
                     } else {
@@ -94,15 +98,18 @@ public class BufferPool {
                 return false;
             }
             if (lockType == 0) {
-                PageLock pageLock = new PageLock(transactionId, lockType);
+                PageLock pageLock = new PageLock(transactionId, 0);
                 pageLockList.add(pageLock);
+                lockMap.put(pageId, pageLockList);
                 return true;
             }
             return false;
         }
-        public synchronized boolean releaseLock(PageId pageId,TransactionId transactionId) {
+
+        public synchronized boolean releaseLock(PageId pageId, TransactionId transactionId) {
+            assert lockMap.get(pageId) != null : "page not locked!";
             List<PageLock> lockList = lockMap.get(pageId);
-            for (int i = lockList.size()-1; i >=0; i--) {
+            for (int i = lockList.size() - 1; i >= 0; i--) {
                 PageLock temp = lockList.get(i);
                 if (temp.transactionId == transactionId) {
                     lockList.remove(temp);
@@ -116,7 +123,7 @@ public class BufferPool {
         }
 
         public synchronized boolean holdsLock(PageId pageId, TransactionId transactionId) {
-            List<PageLock> lockList = lockMap.getOrDefault(pageId,null);
+            List<PageLock> lockList = lockMap.getOrDefault(pageId, null);
             if (lockList == null) {
                 return false;
             }
@@ -141,6 +148,8 @@ public class BufferPool {
         this.numPages = numPages;
         pageStore = new ConcurrentHashMap<PageId, Page>();
         pageLockManager = new PageLockManager();
+        age = 0;
+        pageAge = new ConcurrentHashMap<>();
     }
 
     public static int getPageSize() {
@@ -172,23 +181,39 @@ public class BufferPool {
      * @param pid  the ID of the requested page
      * @param perm the requested permissions on the page
      */
+
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
-//        if(perm!=Permissions.READ_ONLY){
+        // some code goes here
+        int lockType = 1;
+        if (perm == Permissions.READ_ONLY) {
+            lockType = 0;
+        }
+        boolean lockAcquire = false;
+        long start = System.currentTimeMillis();
+        long timeout = new Random().nextInt(2000) + 1000;
+        while (!lockAcquire) {
+            long now = System.currentTimeMillis();
+            if (now - start > timeout) {
+                throw new TransactionAbortedException();
+            }
+            lockAcquire = pageLockManager.acquireLock(tid, pid, lockType);
+        }
+
         if (!pageStore.containsKey(pid)) {
-            if (pageStore.size() > numPages) {
-//                throw new DbException("Bufferpool is full");
+            if (pageStore.size() >= numPages) {
                 evictPage();
             }
-            pageLockManager.acquireLock(tid,pid,0);
             DbFile dbfile = Database.getCatalog().getDatabaseFile(pid.getTableId());
-            Page page = dbfile.readPage(pid);
-            pageStore.put(pid, page);
-            pageLockManager.releaseLock(pid,tid);
-
+            pageStore.put(pid, dbfile.readPage(pid));
+            pageAge.put(pid, age++);
         }
-        return pageStore.get(pid);
+        Page page = pageStore.get(pid);
 
+
+        return page;
+
+//        throw new DbException("can not have page");
 
         // some code goes here
     }
@@ -202,10 +227,14 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      * @param pid the ID of the page to unlock
      */
-    public void releasePage(TransactionId tid, PageId pid) {
+//<<<<<<< HEAD
+//    public void releasePage(TransactionId tid, PageId pid) {
+//=======
+    public void unsafeReleasePage(TransactionId tid, PageId pid) {
+//>>>>>>> ddfe6be1ee14e303389f37581daf60574b2ce75f
         // some code goes here
         // not necessary for lab1|lab2
-        pageLockManager.releaseLock(pid,tid);
+        pageLockManager.releaseLock(pid, tid);
     }
 
     /**
@@ -216,7 +245,7 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid) {
         // some code goes here
         // not necessary for lab1|lab2
-
+        transactionComplete(tid, true);
     }
 
     /**
@@ -225,7 +254,7 @@ public class BufferPool {
     public boolean holdsLock(TransactionId tid, PageId p) {
         // some code goes here
         // not necessary for lab1|lab2
-        return pageLockManager.holdsLock(p,tid);
+        return pageLockManager.holdsLock(p, tid);
     }
 
     /**
@@ -238,6 +267,34 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid, boolean commit) {
         // some code goes here
         // not necessary for lab1|lab2
+        try {
+            if (commit) {
+                flushPages(tid);
+            } else {
+//                abort  revert any changes made by the transaction by restoring the page to its on-disk state.
+                restorePage(tid);
+            }
+            for (PageId pageId : pageStore.keySet()) {
+                if (holdsLock(tid, pageId)) {
+                    unsafeReleasePage(tid, pageId);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
+    }
+
+    private synchronized void restorePage(TransactionId transactionId) {
+        for (PageId pageId : pageStore.keySet()) {
+            Page page = pageStore.get(pageId);
+            if (page.isDirty() == transactionId) {
+                int tableId = pageId.getTableId();
+                Page newPage = Database.getCatalog().getDatabaseFile(tableId).readPage(pageId);
+                pageStore.put(pageId, newPage);
+            }
+        }
     }
 
     /**
@@ -283,8 +340,6 @@ public class BufferPool {
         // not necessary for lab1
         DbFile f = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
         updateBufferPool(f.deleteTuple(tid, t), tid);
-
-
     }
 
     private void updateBufferPool(List<Page> pageList, TransactionId id) throws DbException {
@@ -323,6 +378,7 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1
         pageStore.remove(pid);
+        pageAge.remove(pid);
     }
 
     /**
@@ -350,6 +406,11 @@ public class BufferPool {
     public synchronized void flushPages(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        for (PageId pageId : pageStore.keySet()) {
+            if (pageStore.get(pageId).isDirty() == tid) {
+                flushPage(pageId);
+            }
+        }
     }
 
     /**
@@ -359,14 +420,27 @@ public class BufferPool {
     private synchronized void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
-        //evict the first page
-        PageId pid = new ArrayList<>(pageStore.keySet()).get(0);
-        try {
-            flushPage(pid);
-        } catch (IOException e) {
-            e.printStackTrace();
+        //evict the oldest page
+        PageId pageId = null;
+        int oldestPage = -1;
+        for (PageId pid : pageStore.keySet()) {
+            Page page = pageStore.get(pid);
+            if (page.isDirty() != null) {
+                continue;
+            }
+            if (pageId == null) {
+                pageId = pid;
+                oldestPage = pageAge.get(pageId);
+                continue;
+            }
+            if (pageAge.get(pid) < oldestPage) {
+                pageId = pid;
+                oldestPage = pageAge.get(pid);
+            }
         }
-        discardPage(pid);
+        if (pageId == null)
+            throw new DbException("failed to evict page: all pages are either dirty");
+        discardPage(pageId);
     }
 
 }

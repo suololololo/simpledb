@@ -163,20 +163,31 @@ public class HeapFile implements DbFile {
             throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         List<Page> pageList = new ArrayList<>();
+        HeapPage heapPage = null;
         for (int i = 0; i < numPages(); i++) {
-            HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, new HeapPageId(this.getId(), i), Permissions.READ_WRITE);
-            if (heapPage.getNumEmptySlots() == 0) {
-                continue;
+            HeapPageId heapPageId = new HeapPageId(this.getId(),i);
+            heapPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
+            if (heapPage.getNumEmptySlots() != 0) {
+                break;
+            } else {
+                Database.getBufferPool().unsafeReleasePage(tid,heapPageId);
             }
-            heapPage.insertTuple(t);
-            pageList.add(heapPage);
-            return pageList;
+
         }
-        BufferedOutputStream bw = new BufferedOutputStream(new FileOutputStream(f,true));
-        byte[] emptyData = HeapPage.createEmptyPageData();
-        bw.write(emptyData);
-        bw.close();
-        HeapPage heapPage = (HeapPage)Database.getBufferPool().getPage(tid,new HeapPageId(this.getId(),numPages()-1),Permissions.READ_WRITE);
+        if (heapPage == null || heapPage.getNumEmptySlots() == 0) {
+//            BufferedOutputStream bw = new BufferedOutputStream(new FileOutputStream(f,true));
+            byte[] emptyData = HeapPage.createEmptyPageData();
+//            bw.write(emptyData);
+//            bw.close();
+            HeapPageId heapPageId = new HeapPageId(this.getId(),numPages());
+            HeapPage newPage = new HeapPage(heapPageId,emptyData);
+            writePage(newPage);
+//            heapPage = (HeapPage)Database.getBufferPool().getPage(tid,new HeapPageId(this.getId(),numPages()-1),Permissions.READ_WRITE);
+            heapPage = (HeapPage) Database.getBufferPool().getPage(tid,heapPageId,Permissions.READ_WRITE);
+//            heapPage.insertTuple(t);
+//            pageList.add(heapPage);
+//            return pageList;
+        }
         heapPage.insertTuple(t);
         pageList.add(heapPage);
         return pageList;
