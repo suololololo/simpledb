@@ -108,6 +108,7 @@ public class SeqScan implements OpIterator {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
+//        return Database.getCatalog().getTupleDesc(tableId);
         try {
             return Database.getCatalog().getTupleDesc(tableId).clone(tableAlias);
         }
@@ -144,7 +145,4 @@ public class SeqScan implements OpIterator {
         iterator.rewind();
     }
 
-    public static void main(String[] args) {
-        System.out.println("ssss");
-    }
 }
